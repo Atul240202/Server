@@ -1,0 +1,9 @@
+# Common for web extensions / JS projects
+node_modules/
+dist/
+build/
+.env
+*.log
+.vscode/
+.DS_Store
+.env.local
