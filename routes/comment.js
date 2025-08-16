@@ -57,7 +57,7 @@ router.post(
 
       // Add job to queue
       const job = await addCommentJob({
-        jobId: commentJob._id,
+        jobId: commentJob._id.toString(), // Convert ObjectId to string
         userId: req.userId,
         keywords,
         maxComments,
@@ -75,7 +75,7 @@ router.post(
         success: true,
         message: 'Comment job started successfully',
         data: {
-          jobId: commentJob._id,
+          jobId: commentJob._id.toString(), // Convert ObjectId to string
           queueJobId: job.id,
           keywords,
           maxComments,

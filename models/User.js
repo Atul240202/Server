@@ -3,25 +3,12 @@ import mongoose from 'mongoose';
 // LinkedIn Token Schema (Child Schema)
 const LinkedInTokenSchema = new mongoose.Schema(
   {
-    accessToken: {
-      type: String,
-      required: false,
-    },
-    comprehensiveTokens: {
-      type: Object,
-    },
     lastExtracted: {
       type: Date,
     },
     extractionCount: {
       type: Number,
       default: 0,
-    },
-    refreshToken: {
-      type: String,
-    },
-    expiresAt: {
-      type: Date,
     },
     tokenType: {
       type: String,
@@ -170,6 +157,44 @@ const CookieSchema = new mongoose.Schema(
   }
 );
 
+// Extension Pairing Schema (Child Schema)
+const ExtensionPairingSchema = new mongoose.Schema(
+  {
+    isPaired: {
+      type: Boolean,
+      default: false,
+    },
+    userEmail: {
+      type: String,
+      required: false,
+    },
+    authToken: {
+      type: String,
+      required: false,
+    },
+    initiatedAt: {
+      type: Date,
+      default: null,
+    },
+    pairedAt: {
+      type: Date,
+      default: null,
+    },
+    lastActive: {
+      type: Date,
+      default: null,
+    },
+    lastAttempt: {
+      type: Date,
+      default: null,
+    },
+  },
+  {
+    _id: false,
+    timestamps: true,
+  }
+);
+
 // User Schema (Parent Schema)
 const UserSchema = new mongoose.Schema(
   {
@@ -202,6 +227,7 @@ const UserSchema = new mongoose.Schema(
     devices: [DeviceSchema], // Array of devices
     cookies: [CookieSchema], // Array of cookies with device tracking
     settings: UserSettingsSchema, // User automation settings
+    extensionPairing: ExtensionPairingSchema, // Extension pairing status
     isActive: {
       type: Boolean,
       default: true,

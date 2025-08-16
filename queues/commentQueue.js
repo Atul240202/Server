@@ -32,6 +32,7 @@ const commentQueue = new Queue('comment-jobs', {
  */
 export const addCommentJob = async (jobData) => {
   try {
+    console.log('Adding comment job to queue:', jobData);
     const job = await commentQueue.add('process-comment-job', jobData, {
       priority: 1,
       delay: 0,

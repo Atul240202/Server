@@ -200,14 +200,177 @@ router.post('/verify-token', async (req, res) => {
 
     res.json({
       valid: true,
-      message: 'Token verified successfully',
       user: user,
     });
   } catch (error) {
-    console.error('Token verification error:', error);
     res.status(401).json({
       valid: false,
       message: 'Invalid token',
+    });
+  }
+});
+
+// POST check extension status
+router.post('/check-extension-status', authenticateToken, async (req, res) => {
+  try {
+    const { userId, userEmail } = req.body;
+
+    // Get user's extension pairing info from database
+    const user = await User.findById(userId).select('extensionPairing');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    // Check if user has extension pairing data
+    const extensionInfo = user.extensionPairing;
+
+    // Check if pairing attempt has expired (3 minutes)
+    if (extensionInfo && extensionInfo.initiatedAt) {
+      const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
+      if (
+        extensionInfo.initiatedAt < threeMinutesAgo &&
+        !extensionInfo.isPaired
+      ) {
+        // Clear expired pairing attempt
+        await User.findByIdAndUpdate(userId, {
+          $unset: {
+            extensionPairing: 1,
+          },
+        });
+
+        return res.json({
+          success: true,
+          isPaired: false,
+          extensionInfo: null,
+        });
+      }
+    }
+
+    if (extensionInfo && extensionInfo.isPaired) {
+      res.json({
+        success: true,
+        isPaired: true,
+        extensionInfo: {
+          userEmail: extensionInfo.userEmail,
+          pairedAt: extensionInfo.pairedAt,
+          lastActive: extensionInfo.lastActive,
+        },
+      });
+    } else {
+      res.json({
+        success: true,
+        isPaired: false,
+        extensionInfo: null,
+      });
+    }
+  } catch (error) {
+    console.error('Error checking extension status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error checking extension status',
+    });
+  }
+});
+
+// POST initiate pairing
+router.post('/initiate-pairing', authenticateToken, async (req, res) => {
+  try {
+    const { userId, userEmail, authToken, timestamp } = req.body;
+
+    // Store pairing attempt in database
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        extensionPairing: {
+          isPaired: false,
+          userEmail: userEmail,
+          authToken: authToken,
+          initiatedAt: timestamp,
+          lastAttempt: new Date(),
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Pairing initiated successfully',
+    });
+  } catch (error) {
+    console.error('Error initiating pairing:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error initiating pairing',
+    });
+  }
+});
+
+// POST complete pairing (called by extension)
+router.post('/complete-pairing', async (req, res) => {
+  try {
+    const { userId, userEmail, authToken } = req.body;
+
+    // Verify the auth token
+    const decoded = jwt.verify(
+      authToken,
+      process.env.JWT_SECRET || 'your-secret-key'
+    );
+
+    if (decoded.userId !== userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid authentication token',
+      });
+    }
+
+    // Update user's extension pairing status
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        extensionPairing: {
+          isPaired: true,
+          userEmail: userEmail,
+          pairedAt: new Date(),
+          lastActive: new Date(),
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Extension paired successfully',
+    });
+  } catch (error) {
+    console.error('Error completing pairing:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error completing pairing',
+    });
+  }
+});
+
+// POST disconnect extension
+router.post('/disconnect-extension', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    // Clear extension pairing data
+    await User.findByIdAndUpdate(userId, {
+      $unset: {
+        extensionPairing: 1,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Extension disconnected successfully',
+    });
+  } catch (error) {
+    console.error('Error disconnecting extension:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error disconnecting extension',
     });
   }
 });

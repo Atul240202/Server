@@ -978,22 +978,14 @@ router.post('/linkedin-tokens', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Store the comprehensive token data
-    const tokenData = {
-      cookies: tokens.cookies || {},
-      extractedAt: extractedAt || new Date().toISOString(),
-      storedAt: new Date().toISOString(),
-    };
-
-    // Update user with comprehensive token data
+    // Update LinkedIn metadata
     user.linkedin = {
       ...user.linkedin,
-      comprehensiveTokens: tokenData,
       lastExtracted: new Date(),
       extractionCount: (user.linkedin?.extractionCount || 0) + 1,
     };
 
-    // Smart cookie comparison and update logic
+    // SIMPLIFIED: Only store li_at cookies
     let cookiesUpdated = false;
     let newCookiesCount = 0;
     let updatedCookiesCount = 0;
@@ -1003,21 +995,25 @@ router.post('/linkedin-tokens', async (req, res) => {
       Array.isArray(tokens.cookies) &&
       tokens.cookies.length > 0
     ) {
-      // Get existing LinkedIn cookies for this device
-      const existingCookies = user.cookies.filter(
-        (cookie) =>
-          cookie.domain?.includes('linkedin.com') &&
-          cookie.deviceId === (deviceId || 'extension')
+      // Filter only li_at cookies
+      const liAtCookies = tokens.cookies.filter(
+        (cookie) => cookie.name === 'li_at'
       );
 
-      // Create a map of existing cookies by name for quick lookup
-      const existingCookiesMap = new Map();
-      existingCookies.forEach((cookie) => {
-        existingCookiesMap.set(cookie.name, cookie);
-      });
+      if (liAtCookies.length === 0) {
+        console.log('No li_at cookies found in tokens');
+        return res.json({
+          message: 'No li_at cookies found',
+          extractionCount: user.linkedin.extractionCount,
+          cookiesCount: 0,
+          newCookiesCount: 0,
+          updatedCookiesCount: 0,
+          cookiesUpdated: false,
+        });
+      }
 
-      // Process new cookies
-      const processedCookies = tokens.cookies.map((cookie) => {
+      // Process li_at cookies
+      const processedCookies = liAtCookies.map((cookie) => {
         // Handle case where cookie.value might be an object or string
         let cookieValue = cookie.value;
         if (typeof cookieValue === 'object' && cookieValue !== null) {
@@ -1039,7 +1035,19 @@ router.post('/linkedin-tokens', async (req, res) => {
         };
       });
 
-      // Compare and update cookies
+      // Get existing li_at cookies for this user
+      const existingLiAtCookies = user.cookies.filter(
+        (cookie) =>
+          cookie.name === 'li_at' && cookie.domain?.includes('linkedin.com')
+      );
+
+      // Create a map of existing cookies by name for quick lookup
+      const existingCookiesMap = new Map();
+      existingLiAtCookies.forEach((cookie) => {
+        existingCookiesMap.set(cookie.name, cookie);
+      });
+
+      // Process each new li_at cookie
       for (const newCookie of processedCookies) {
         const existingCookie = existingCookiesMap.get(newCookie.name);
 
@@ -1048,26 +1056,33 @@ router.post('/linkedin-tokens', async (req, res) => {
           user.cookies.push(newCookie);
           newCookiesCount++;
           cookiesUpdated = true;
+          console.log(`Added new li_at cookie`);
         } else if (existingCookie.value !== newCookie.value) {
-          // Cookie value has changed - update it
-          existingCookie.value = newCookie.value;
-          existingCookie.updatedAt = new Date();
+          // Cookie value has changed - replace the existing one
+          const index = user.cookies.indexOf(existingCookie);
+          user.cookies[index] = newCookie;
           updatedCookiesCount++;
           cookiesUpdated = true;
+          console.log(`Replaced existing li_at cookie`);
+        } else {
+          // Cookie exists and value is the same - just update device ID and timestamp
+          existingCookie.deviceId = newCookie.deviceId;
+          existingCookie.updatedAt = new Date();
+          console.log(`li_at cookie unchanged`);
         }
-        // If cookie exists and value is the same, do nothing
       }
 
-      // Remove cookies that no longer exist in the new set
-      const newCookieNames = new Set(processedCookies.map((c) => c.name));
-      const cookiesToRemove = existingCookies.filter(
-        (cookie) => !newCookieNames.has(cookie.name)
+      // Remove any old li_at cookies that are no longer in the new set
+      const cookiesToRemove = existingLiAtCookies.filter(
+        (cookie) =>
+          !processedCookies.some((newCookie) => newCookie.name === cookie.name)
       );
 
       if (cookiesToRemove.length > 0) {
         user.cookies = user.cookies.filter(
           (cookie) => !cookiesToRemove.includes(cookie)
         );
+        console.log(`Removed ${cookiesToRemove.length} old li_at cookies`);
         cookiesUpdated = true;
       }
     }
@@ -1076,14 +1091,14 @@ router.post('/linkedin-tokens', async (req, res) => {
 
     res.json({
       message: cookiesUpdated
-        ? 'LinkedIn tokens updated successfully'
-        : 'LinkedIn tokens unchanged',
+        ? 'LinkedIn li_at cookie updated successfully'
+        : 'LinkedIn li_at cookie unchanged',
       extractionCount: user.linkedin.extractionCount,
-      cookiesCount: Array.isArray(tokens.cookies) ? tokens.cookies.length : 0,
+      cookiesCount: liAtCookies ? liAtCookies.length : 0,
       newCookiesCount,
       updatedCookiesCount,
       cookiesUpdated,
-      storedAt: tokenData.storedAt,
+      storedAt: new Date().toISOString(),
     });
   } catch (err) {
     console.error('Error storing LinkedIn tokens:', err);
