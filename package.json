@@ -9,6 +9,8 @@
     "dev": "nodemon index.js",
     "worker": "node startWorker.js",
     "worker:dev": "nodemon startWorker.js",
+    "worker:linkedpost": "node startLinkedPostRefinementWorker.js",
+    "worker:linkedpost:dev": "nodemon startLinkedPostRefinementWorker.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

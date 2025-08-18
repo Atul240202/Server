@@ -5,7 +5,11 @@ const postSchema = new mongoose.Schema(
     postUrl: {
       type: String,
       required: true,
-      unique: true,
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
     },
     content: {
       type: String,
@@ -50,8 +54,12 @@ const postSchema = new mongoose.Schema(
   }
 );
 
+// Compound unique index: postUrl + userId (allows same post for different users)
+postSchema.index({ postUrl: 1, userId: 1 }, { unique: true });
+
 // Indexes for better query performance
 postSchema.index({ jobId: 1 });
+postSchema.index({ userId: 1 }); // Add user-specific queries
 postSchema.index({ scrapedAt: -1 });
 postSchema.index({ isCommented: 1 });
 postSchema.index({ reactions: -1 });
