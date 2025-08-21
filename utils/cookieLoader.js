@@ -15,11 +15,11 @@ export async function loadCookiesFromDB(userId) {
     }
 
     // Get only li_at cookies for the user
-    const liAtCookies = user.cookies.filter(
+    const linkedinCookies = user.cookies.filter(
       (cookie) =>
-        cookie.name === 'li_at' &&
         cookie.domain &&
-        cookie.domain.includes('linkedin.com')
+        cookie.domain.includes('linkedin.com') &&
+        cookie.isActive
     );
 
     // Filter out expired cookies
@@ -29,39 +29,52 @@ export async function loadCookiesFromDB(userId) {
       return new Date(cookie.expiresAt) > currentTime;
     });
 
-    // Get only the most recent li_at cookie
-    let mostRecentCookie = null;
-    activeCookies.forEach((cookie) => {
-      if (!mostRecentCookie || cookie.updatedAt > mostRecentCookie.updatedAt) {
-        mostRecentCookie = cookie;
-      }
-    });
+    console.log(`Found ${activeCookies.length} active LinkedIn cookies`);
 
-    if (!mostRecentCookie) {
-      console.log(`No valid li_at cookies found for user ${userId}`);
-      return [];
-    }
-
-    console.log(`Found 1 li_at cookie for user ${userId}`);
-
-    // Convert to Puppeteer-compatible format (matching working script exactly)
-    const puppeteerCookie = {
-      name: mostRecentCookie.name, // 'li_at'
-      value: mostRecentCookie.value,
-      domain: '.www.linkedin.com', // ← CRITICAL: Match working script domain
-      path: '/', // ← CRITICAL: Match working script path
-      httpOnly: true,
-      secure: true,
-      // do NOT set expires if you don't have it (session cookie ok)
-    };
-
-    return [puppeteerCookie];
+    return activeCookies.map((cookie) => ({
+      name: cookie.name,
+      value: cookie.value,
+      domain: cookie.domain,
+      path: cookie.path || '/',
+      httpOnly: cookie.httpOnly !== false,
+      secure: cookie.secure !== false,
+      sameSite: cookie.sameSite || 'None',
+      ...(cookie.expiresAt && {
+        expires: new Date(cookie.expiresAt).getTime() / 1000,
+      }),
+    }));
   } catch (error) {
     console.error(
       `Error loading li_at cookies for user ${userId}:`,
       error.message
     );
     throw error;
+  }
+}
+
+export async function validateLinkedInSession(page, userId) {
+  try {
+    // Check current URL
+    const url = page.url();
+    if (url.includes('/login') || url.includes('/checkpoint')) {
+      return false;
+    }
+
+    // Check for session elements
+    const sessionValid = await page.evaluate(() => {
+      // Check multiple indicators
+      const hasNavBar = !!document.querySelector('.global-nav');
+      const hasProfilePhoto = !!document.querySelector('.global-nav__me-photo');
+      const hasFeed = !!document.querySelector('.feed-identity-module');
+      const hasMessaging = !!document.querySelector('.msg-overlay-container');
+
+      return hasNavBar || hasProfilePhoto || hasFeed || hasMessaging;
+    });
+
+    return sessionValid;
+  } catch (error) {
+    console.error('Error validating session:', error);
+    return false;
   }
 }
 

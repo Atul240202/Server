@@ -25,6 +25,7 @@ const router = express.Router();
 router.post(
   '/start-comment-job',
   authenticateToken,
+  jobRateLimiter,
   requireLinkedInCookies,
   async (req, res) => {
     try {

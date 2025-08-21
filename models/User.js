@@ -238,6 +238,22 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
+UserSchema.pre('save', async function (next) {
+  if (this.isModified('cookies')) {
+    this.cookies = this.cookies.map((cookie) => {
+      if (cookie.value && !cookie.encrypted) {
+        const encryptedData = encryptCookie(cookie.value);
+        return {
+          ...cookie.toObject(),
+          value: JSON.stringify(encryptedData),
+          encrypted: true,
+        };
+      }
+      return cookie;
+    });
+  }
+  next();
+});
 // Create indexes for better query performance
 UserSchema.index({ 'cookies.name': 1 });
 UserSchema.index({ 'cookies.deviceId': 1 });

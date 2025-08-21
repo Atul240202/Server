@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: linkedin-scraper
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: linkedin-scraper
+data:
+  NODE_ENV: 'production'
+  WORKER_COUNT: '8'
+  WORKER_CONCURRENCY: '5'
+  LOG_LEVEL: 'info'
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+  namespace: linkedin-scraper
+type: Opaque
+stringData:
+  JWT_SECRET: 'your-jwt-secret'
+  ENCRYPTION_KEY: 'your-encryption-key'
+  OPENAI_API_KEY: 'your-openai-key'
+  MONGODB_URI: 'your-mongodb-uri'
+  REDIS_PASSWORD: 'your-redis-password'
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: worker
+  namespace: linkedin-scraper
+spec:
+  serviceName: worker
+  replicas: 10
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: your-registry/linkedin-scraper:latest
+          command: ['node', 'startEnhancedWorker.js']
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          resources:
+            requests:
+              memory: '2Gi'
+              cpu: '1'
+            limits:
+              memory: '4Gi'
+              cpu: '2'
+          volumeMounts:
+            - name: browser-profiles
+              mountPath: /app/browser-profiles
+  volumeClaimTemplates:
+    - metadata:
+        name: browser-profiles
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources:
+          requests:
+            storage: 10Gi
